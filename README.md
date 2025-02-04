@@ -20,7 +20,9 @@ esptool.py erase_flash
 esptool.py --baud 460800 write_flash 0x1000 firmware/ESP32_GENERIC-20241129-v1.24.1.bin
 ```
 
-## Clone libraries
+## Optional
+
+### Clone libraries
 
 ```sh
 git clone https://github.com/miguelgrinberg/microdot
@@ -28,7 +30,7 @@ git clone https://github.com/miguelgrinberg/microdot
 git clone https://github.com/brainelectronics/micropython-modbus
 ```
 
-## Copy libraries into esp32 root
+### Copy libraries into esp32 root
 
 ```sh
 cp -R microdot/src/microdot code/
