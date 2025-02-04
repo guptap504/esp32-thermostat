@@ -42,6 +42,6 @@ cp -R micropython-modbus/umodbus code/
 # Activate virualenv
 # pyenv activate esp32
 
-./flash.sh <port> <ssid> <password>
+./flash.sh <ssid> <password>
 ``
 ```

@@ -3,16 +3,15 @@
 set -e
 
 # Check if serial number and Wi-Fi credentials are provided
-if [ -z "$1" ] || [ -z "$2" ] || [ -z "$3" ] ; then
-  echo "Usage: $0 <port> <wifi_ssid> <wifi_password>"
+if [ -z "$1" ] || [ -z "$2" ] ; then
+  echo "Usage: $0 <wifi_ssid> <wifi_password>"
   exit 1
 fi
 
-PORT=$1
 SERIAL_NUMBER=$(python random_string.py) 
 TOKEN=$(python random_string.py)
-WIFI_SSID=$2
-WIFI_PASSWORD=$3
+WIFI_SSID=$1
+WIFI_PASSWORD=$2
 
 # Create device_config.py with the serial number
 echo "SERIAL_NUMBER = '$SERIAL_NUMBER'" >  device.py
