@@ -33,6 +33,11 @@ type Config struct {
 		SlaveID     uint8  `json:"slaveId"`
 		TimeoutSecs int    `json:"timeoutSecs"`
 	} `json:"modbus"`
+	Unoccupied struct {
+		Pin      int `json:"pin"`
+		FanState int `json:"fanState"`
+		Setpoint int `json:"setpoint"`
+	}
 }
 
 func ReadConfig(path string) (Config, error) {
@@ -75,6 +80,15 @@ func ReadConfig(path string) (Config, error) {
 	}
 	if config.Modbus.TimeoutSecs == 0 {
 		config.Modbus.TimeoutSecs = 5
+	}
+	if config.Unoccupied.Pin == 0 {
+		config.Unoccupied.Pin = 27
+	}
+	if config.Unoccupied.FanState == 0 {
+		config.Unoccupied.FanState = 1
+	}
+	if config.Unoccupied.Setpoint == 0 {
+		config.Unoccupied.Setpoint = 23
 	}
 
 	return config, nil
@@ -122,24 +136,56 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	pin := rpio.Pin(27)
+	pin := rpio.Pin(config.Unoccupied.Pin)
 	pin.Input()
+	pin.Detect(rpio.AnyEdge)
 
 	isOcccupied := false
 
+	client := modbus.NewClient(handler)
+	var previousFanState uint16
+	var previousSetpoint uint16
 	go func() {
 		for {
-			res := pin.Read()
-			if res == rpio.Low {
-				isOcccupied = false
-			} else {
-				isOcccupied = true
+			if pin.EdgeDetected() {
+				res := pin.Read()
+				if res == rpio.Low {
+					requestQueue <- func() {
+						results, err := client.ReadHoldingRegisters(3, 2)
+						if err != nil {
+							e.Logger.Warnf("Error reading from thermostat: %v", err)
+						}
+						previousSetpoint = binary.BigEndian.Uint16(results[:2])
+						previousFanState = binary.BigEndian.Uint16(results[2:])
+						_, err = client.WriteSingleRegister(uint16(3), uint16(config.Unoccupied.Setpoint))
+						if err != nil {
+							e.Logger.Warnf("Error writing to thermostat: %v", err)
+						}
+						_, err = client.WriteSingleRegister(uint16(4), uint16(config.Unoccupied.FanState))
+						if err != nil {
+							e.Logger.Warnf("Error writing to thermostat: %v", err)
+						}
+					}
+					isOcccupied = false
+				} else {
+					requestQueue <- func() {
+						if previousSetpoint != 0 && previousFanState != 0 {
+							_, err := client.WriteSingleRegister(uint16(3), uint16(previousSetpoint))
+							if err != nil {
+								e.Logger.Warnf("Error writing to thermostat: %v", err)
+							}
+							_, err = client.WriteSingleRegister(uint16(4), uint16(previousFanState))
+							if err != nil {
+								e.Logger.Warnf("Error writing to thermostat: %v", err)
+							}
+						}
+					}
+					isOcccupied = true
+				}
 			}
-			time.Sleep(100 * time.Microsecond)
+			time.Sleep(100 * time.Millisecond)
 		}
 	}()
-
-	client := modbus.NewClient(handler)
 
 	e.GET("/read", func(c echo.Context) error {
 		response := make([]uint16, 0, 12)
