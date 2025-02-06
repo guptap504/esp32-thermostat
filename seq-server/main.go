@@ -78,7 +78,7 @@ func ReadConfig(path string) (Config, error) {
 	return config, nil
 }
 
-// var requestQueue = make(chan func(), 1000)
+var requestQueue = make(chan func(), 1000)
 
 func main() {
 	configPath := flag.String("config", "config.json", "Path to config file")
@@ -97,11 +97,11 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	// go func() {
-	// 	for request := range requestQueue {
-	// 		request()
-	// 	}
-	// }()
+	go func() {
+		for request := range requestQueue {
+			request()
+		}
+	}()
 
 	handler := modbus.NewRTUClientHandler(config.Port)
 	handler.BaudRate = config.Modbus.BaudRate
@@ -139,13 +139,22 @@ func main() {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 		var request SetRequest
-		if err = c.Bind(&request); err != nil {
+		if err := c.Bind(&request); err != nil {
 			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
 		}
 
-		_, err = client.WriteSingleRegister(uint16(address), uint16(request.Value))
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		done := make(chan bool)
+		var e error
+		requestQueue <- func() {
+			_, err := client.WriteSingleRegister(uint16(address), uint16(request.Value))
+			if err != nil {
+				e = err
+			}
+			done <- true
+		}
+		<-done
+		if e != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": e.Error()})
 		}
 		return c.JSON(http.StatusOK, map[string]string{"message": "Value set successfully"})
 	})
