@@ -121,21 +121,25 @@ func main() {
 
 	e.GET("/read", func(c echo.Context) error {
 		done := make(chan bool)
+		response := make([]uint16, 0, 12)
+		var e error
 		requestQueue <- func() {
 			results, err := client.ReadHoldingRegisters(1, 12)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				e = err
+			} else {
+				for i := 0; i < len(results); i += 2 {
+					r := binary.BigEndian.Uint16(results[i : i+2])
+					response = append(response, r)
+				}
 			}
-			response := make([]uint16, 0)
-			for i := 0; i < len(results); i += 2 {
-				r := binary.BigEndian.Uint16(results[i : i+2])
-				response = append(response, r)
-			}
-			c.JSON(http.StatusOK, response)
 			done <- true
 		}
 		<-done
-		return nil
+		if e != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": e.Error()})
+		}
+		return c.JSON(http.StatusOK, response)
 	})
 
 	e.POST("/set/:address", func(c echo.Context) error {
@@ -149,14 +153,18 @@ func main() {
 		}
 
 		done := make(chan bool)
+		var e error
 		requestQueue <- func() {
 			_, err := client.WriteSingleRegister(uint16(address), uint16(request.Value))
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+				e = err
 			}
 			done <- true
 		}
 		<-done
+		if e != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": e.Error()})
+		}
 		return c.JSON(http.StatusOK, map[string]string{"message": "Value set successfully"})
 	})
 
