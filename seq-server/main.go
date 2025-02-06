@@ -120,24 +120,15 @@ func main() {
 	client := modbus.NewClient(handler)
 
 	e.GET("/read", func(c echo.Context) error {
-		done := make(chan bool)
 		response := make([]uint16, 0, 12)
-		var e error
-		requestQueue <- func() {
-			results, err := client.ReadHoldingRegisters(1, 12)
-			if err != nil {
-				e = err
-			} else {
-				for i := 0; i < len(results); i += 2 {
-					r := binary.BigEndian.Uint16(results[i : i+2])
-					response = append(response, r)
-				}
+		results, err := client.ReadHoldingRegisters(1, 12)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		} else {
+			for i := 0; i < len(results); i += 2 {
+				r := binary.BigEndian.Uint16(results[i : i+2])
+				response = append(response, r)
 			}
-			done <- true
-		}
-		<-done
-		if e != nil {
-			return c.JSON(http.StatusInternalServerError, map[string]string{"error": e.Error()})
 		}
 		return c.JSON(http.StatusOK, response)
 	})
