@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -125,7 +126,12 @@ func main() {
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
 			}
-			c.JSON(http.StatusOK, results)
+			response := make([]uint16, 0)
+			for i := 0; i < len(results); i += 2 {
+				r := binary.BigEndian.Uint16(results[i : i+2])
+				response = append(response, r)
+			}
+			c.JSON(http.StatusOK, response)
 			done <- true
 		}
 		<-done
