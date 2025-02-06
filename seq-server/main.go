@@ -157,7 +157,7 @@ func main() {
 			done <- true
 		}
 		<-done
-		return c.NoContent(http.StatusOK)
+		return c.JSON(http.StatusOK, map[string]string{"message": "Value set successfully"})
 	})
 
 	e.GET("/info", func(c echo.Context) error {
