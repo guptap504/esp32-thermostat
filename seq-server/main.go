@@ -13,6 +13,8 @@ import (
 	"github.com/goburrow/modbus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+
+	"github.com/stianeikeland/go-rpio/v4"
 )
 
 type SetRequest struct {
@@ -116,6 +118,26 @@ func main() {
 		panic(err)
 	}
 	defer handler.Close()
+	err = rpio.Open()
+	if err != nil {
+		panic(err)
+	}
+	pin := rpio.Pin(27)
+	pin.Input()
+
+	isOcccupied := false
+
+	go func() {
+		for {
+			res := pin.Read()
+			if res == rpio.Low {
+				isOcccupied = false
+			} else {
+				isOcccupied = true
+			}
+			time.Sleep(100 * time.Microsecond)
+		}
+	}()
 
 	client := modbus.NewClient(handler)
 
@@ -160,7 +182,11 @@ func main() {
 	})
 
 	e.GET("/info", func(c echo.Context) error {
-		return c.JSON(http.StatusOK, map[string]string{"serial_number": config.SerialNumber})
+		occ := "yes"
+		if !isOcccupied {
+			occ = "no"
+		}
+		return c.JSON(http.StatusOK, map[string]string{"serial_number": config.SerialNumber, "isOccupied": occ})
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))
