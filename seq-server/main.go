@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"flag"
+	"fmt"
 	"net/http"
 	"os"
 	"strconv"
@@ -19,6 +20,11 @@ import (
 
 type SetRequest struct {
 	Value int `json:"value"`
+}
+
+type UnoccupiedRequest struct {
+	FanState int `json:"fanState"`
+	Setpoint int `json:"setpoint"`
 }
 
 type Config struct {
@@ -127,9 +133,13 @@ func main() {
 	handler.SlaveId = config.Modbus.SlaveID
 	handler.Timeout = time.Duration(config.Modbus.TimeoutSecs) * time.Second
 
-	err = handler.Connect()
-	if err != nil {
-		panic(err)
+	for {
+		fmt.Println("trying to connect to ", config.Port)
+		err = handler.Connect()
+		if err == nil {
+			break
+		}
+		time.Sleep(time.Second)
 	}
 	defer handler.Close()
 	err = rpio.Open()
@@ -232,7 +242,27 @@ func main() {
 		if !isOcccupied {
 			occ = "no"
 		}
-		return c.JSON(http.StatusOK, map[string]string{"serial_number": config.SerialNumber, "isOccupied": occ})
+		return c.JSON(http.StatusOK, map[string]string{"serial_number": config.SerialNumber, "is_occupied": occ})
+	})
+
+	e.POST("/unoccupied", func(c echo.Context) error {
+		var request UnoccupiedRequest
+		if err := c.Bind(&request); err != nil {
+			return c.JSON(http.StatusBadRequest, map[string]string{"error": err.Error()})
+		}
+		config.Unoccupied.FanState = request.FanState
+		config.Unoccupied.Setpoint = request.Setpoint
+		file, err := os.OpenFile(*configPath, os.O_WRONLY, 0o644)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		}
+		defer file.Close()
+		encoder := json.NewEncoder(file)
+		err = encoder.Encode(config)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		}
+		return c.JSON(http.StatusOK, map[string]string{"message": "updated config"})
 	})
 
 	e.Logger.Fatal(e.Start(":8000"))
