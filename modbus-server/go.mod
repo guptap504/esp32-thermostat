@@ -1,4 +1,4 @@
-module seq-server
+module modbus-server
 
 go 1.23.5
 
