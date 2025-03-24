@@ -1,2 +1,2 @@
-WIFI_SSID = 'Airtel_Ghar'
-WIFI_PASSWORD = 'seemagupta27'
+WIFI_SSID = ''
+WIFI_PASSWORD = ''
